@@ -2,8 +2,8 @@ Introduction
 ==================
 
 SerialModem is a c++ support library for WCDMA/HSPA modems over a serial interface. Currently supported modems are:
-* Cooking Hacks SIM5218E Shield (INTERFACE_SIM5218)
-* MultiTech MTSMC-H5-IP Shield  (INTERFACE_MTSMC_H5)
+* Cooking Hacks SIM5218E Shield - `INTERFACE_SIM5218`
+* MultiTech MTSMC-H5-IP Shield  - `INTERFACE_MTSMC_H5`
 
 SerialModem was initially designed for [Arduino](http://www.arduino.cc/) based devices using the [Arduino 3g GPRS/GSM/GPS Shield](http://www.cooking-hacks.com/documentation/tutorials/arduino-3g-gprs-gsm-gps); but has since evolved to support additional modems.
 
@@ -39,7 +39,7 @@ M2XStreamClient m2xClient(&client, m2xKey);
 void setup() {
 ```
 
-To setup the modem you will need to specify what modem you are using via the ```setHardwareInterface``` method as well as set the correct Network APN using the ```setAPN`` method. This is typically done in the microcontroller startup phase using the following code:
+To setup the modem you will need to specify what modem you are using via the `setHardwareInterface` method as well as set the correct Network APN using the `setAPN` method. This is typically done in the microcontroller startup phase using the following code:
 
 ```cpp
 void setup() {
