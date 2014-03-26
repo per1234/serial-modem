@@ -17,7 +17,7 @@ How to Install the library
 3. Now you can find SerialModem examples under `File->Examples->SerialModem`
 3. Enjoy coding!
 
-Using the SerialModem library with M2X
+Using SerialModem with M2X
 =========================
 
 You will need to include the libaries main header to gives access to the SerialModem class as well as the needed libraries for M2X using the following example:
