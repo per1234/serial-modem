@@ -30,7 +30,7 @@ You will need to include the libaries main header to gives access to the SerialM
 
 Then before your programs **setup** block add a SerialModem client as well as the M2X StreamClient and provide the SerialModem client to the M2X StreamClient as follows:
 
-```
+```cpp
 SerialModemClient client;
 char m2xFeedId[] = "feed-id";    // Feed you want to post to
 char m2xKey[] = "access-key";    // Your M2X access key
