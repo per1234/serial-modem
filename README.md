@@ -17,13 +17,26 @@ How to Install the library
 3. Now you can find SerialModem examples under `File->Examples->SerialModem`
 3. Enjoy coding!
 
-Using the SerialModem library
+Using the SerialModem library with M2X
 =========================
 
-You will need to include the libaries main header to gives access to the SerialModem object using the following code:
+You will need to include the libaries main header to gives access to the SerialModem class as well as the needed libraries for M2X using the following example:
 
 ```
 #include "SerialModem.h"
+#include "jsonlite.h"
+#include "M2XStreamClient.h"
+```
+
+Then before your programs **setup** block add a SerialModem client as well as the M2X StreamClient and provide the SerialModem client to the M2X StreamClient as follows:
+
+```
+SerialModemClient client;
+char m2xFeedId[] = "feed-id";    // Feed you want to post to
+char m2xKey[] = "access-key";    // Your M2X access key
+M2XStreamClient m2xClient(&client, m2xKey);
+
+void setup() {
 ```
 
 Then simply start the modem and point it to the correct APN which is typically done in the microcontroller startup phase using the following code:
@@ -50,6 +63,8 @@ void setup() {
   ...
 }
 ```
+
+Now you can continue to use the M2X StreamClient as normal as it will make use of the SerialModem client for it's communications.
 
 LICENSE
 =======
