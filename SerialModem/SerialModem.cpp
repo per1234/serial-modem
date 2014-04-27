@@ -1,14 +1,15 @@
 #include "SerialModem.h"
 #include "platforms/platform.h"
 
-using namespace Modem;
 
 SerialModemClass SerialModem;
 // The CircularBuffer is created with a reference to the shared buffer so compile
 // time has an accurate SRAM usage calculation vs allocating it at run-time
 char g_sharedBuffer[SERIAL_MODEM_SHARED_BUFFER];
-CircularBuffer *g_circularBuffer = new CircularBuffer(g_sharedBuffer, SERIAL_MODEM_SHARED_BUFFER);
+CircularBuffer *Modem::g_circularBuffer = new CircularBuffer(g_sharedBuffer, SERIAL_MODEM_SHARED_BUFFER);
 
+char PROGMEM Modem::RESPONSE_OK[]     = {"OK"};
+char PROGMEM Modem::RESPONSE_ERROR[]  = {"ERROR"};
 
 SerialModemClass::SerialModemClass() : _driver(NULL),
                                        _sim_pin(NULL),
@@ -89,7 +90,7 @@ size_t SerialModemClass::writeBytes(const uint8_t *bytes, size_t size) {
   // we are just sniffing outgoing bytes to check for line-breaks for cleaner debug output..
   static bool gWriteIsNewline=true;
   if (gWriteIsNewline)
-    DLog("$ ");
+    DLog("> ");
   int offset = 0;
   char tmp[83];
   do {
@@ -105,21 +106,35 @@ size_t SerialModemClass::writeBytes(const uint8_t *bytes, size_t size) {
 }
 
 uint8_t SerialModemClass::sendBasicCommand(const char *cmd, uint32_t timeout, char esc) {
-  char *response = sendCommand(cmd, timeout, esc);
+  if (!assert_driver())
+    return ERROR;
 
-  if (!response)
-    return Modem::NO_RESPONSE;
-  else if (strcasestr(response, "OK"))
-    return Modem::SUCCESS;
-  else if (strcasestr(response, "ERROR"))
-    return Modem::ERROR;
-  else
-    return Modem::FAILURE;
+  return parseBasicResponse(sendCommand(cmd, NULL, timeout, esc));
 }
 
-char * SerialModemClass::sendCommand(const char *cmd, uint32_t timeout, char esc, char *responseCheck) {
+char * SerialModemClass::sendCommand(const char *cmd, response_check_t *responseChecks, uint32_t timeout, char esc) {
   if (!assert_driver())
     return NULL;
+
+  writeCommand(cmd, esc);
+  if (responseChecks == NULL) {
+    PMemString _RESPONSE_OK = PMemString(PMEM_STR_REF_ARRAY(RESPONSE_OK));
+    PMemString _RESPONSE_ERROR = PMemString(PMEM_STR_REF_ARRAY(RESPONSE_ERROR));
+    response_check_t basicResponseCheck[] = {
+      {_RESPONSE_OK, true},
+      {_RESPONSE_ERROR, true},
+      {NULL, NULL}
+    };
+    return getResponse(basicResponseCheck, timeout);
+  }
+  else {
+    return getResponse(responseChecks, timeout);
+  }
+}
+
+void SerialModemClass::writeCommand(const char *cmd, char esc) {
+  if (!assert_driver())
+    return;
 
   DLog("$ %s\n", cmd);
 
@@ -128,17 +143,20 @@ char * SerialModemClass::sendCommand(const char *cmd, uint32_t timeout, char esc
   _hardware_serial->write(cmd);
   if (esc)
     _hardware_serial->write(esc);
+}
 
+char * SerialModemClass::getResponse(response_check_t *responseChecks, uint32_t timeout) {
   g_circularBuffer->resetLeft();
 
-  uint32_t started_at = plt_millis();
   bool started=false;
+  uint32_t started_at = plt_millis();
+  uint16_t previousRead = 0;
+  uint16_t bytesRead = 0;
   do {
     plt_delay(10);
 
-    // Since our buffer is circular, read only a "page" at a time at most
-    uint16_t bytesRead = 0;
-    while (_hardware_serial->available() && bytesRead < SERIAL_MODEM_SHARED_BUFFER) {
+    previousRead = bytesRead;
+    while (_hardware_serial->available()) {
       char ch = _hardware_serial->read();
       if (ch == ESC_CR ||
           ch == ESC_NL ||
@@ -148,55 +166,42 @@ char * SerialModemClass::sendCommand(const char *cmd, uint32_t timeout, char esc
       }
     }
 
-    char *responseMatch = NULL;
-    if ( (responseMatch = g_circularBuffer->substring("OK", ESC_CR)) ||
-         (responseMatch = g_circularBuffer->substring("ERROR", ESC_CR)) ||
-         (responseCheck && (responseMatch = g_circularBuffer->substring(responseCheck, ESC_CR))) ) {
-      DLog(" * match\n");
-      DLog(">> %s\n", g_circularBuffer->realignLeft());
-      return g_circularBuffer->realignLeft();
+    if (!started) {
+      for (response_check_t *r=responseChecks; (r != NULL && r->name != NULL); r++) {
+        if (g_circularBuffer->substring(r->name,
+                                        r->escape ? ESC_CR : 0)) {
+          started = true;
+          break;
+        }
+      }
     }
-  } while((plt_millis() - started_at) < timeout);
-  DLog(" * sendCommand timeout\n");
-  DLog(">> %s\n", g_circularBuffer->realignLeft());
-  return NULL;
+    else if (previousRead == bytesRead) {
+      break;
+    }
+
+    if ((plt_millis() - started_at) >= timeout) {
+      DLog(" * sendCommand timeout\n");
+      break;
+    }
+  } while(true);
+  DLog("$> %s\n", g_circularBuffer->realignLeft());
+  return started ? g_circularBuffer->realignLeft() : NULL;
 }
 
-uint8_t SerialModemClass::readLine(char *buffer, uint8_t size, unsigned int timeout) {
-  if (!assert_driver())
-    return 0;
-  uint8_t pos=0;
-  unsigned long previous = plt_millis();
-  do {
-    if (_hardware_serial->available() == 0)
-      continue;
-    char ch = _hardware_serial->read();
-    // filter out non-ascii characters (possible rx interference?)
-    if (ch >= 32 && ch <= 126)
-      buffer[pos++] = ch;
-    else if (ch == 10 || ch == 13) {
-      // check for an extra line-break/carriage-return and munch it
-      while ((ch = _hardware_serial->peek()) != 0) {
-        if (ch == 10 || ch == 13)
-          _hardware_serial->read();
-        else
-          break;
-      }
-      // an empty line is ignored
-      if (pos == 0)
-        continue;
-
-      buffer[pos] = 0;
-      DLog("> %s\n", buffer);
-      return pos;
-    }
-  } while((millis() - previous) < timeout && pos < size);
-  return 0;
+uint8_t SerialModemClass::parseBasicResponse(char *response) {
+  if (!response)
+    return Modem::NO_RESPONSE;
+  else if (strcasestr(response, PMemString(PMEM_STR_REF_ARRAY(RESPONSE_OK))))
+    return Modem::SUCCESS;
+  else if (strcasestr(response, PMemString(PMEM_STR_REF_ARRAY(RESPONSE_ERROR))))
+    return Modem::ERROR;
+  else
+    return Modem::FAILURE;
 }
 
 void SerialModemClass::onPowerOn() {
   if (assert_driver()) {
-    // _driver->setEchoCommand(false);
+    _driver->setEchoCommand(false);
     _driver->setErrorVerbose(true);
   }
   // writeCommand("AT&V"); // read current configuration

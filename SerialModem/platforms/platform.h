@@ -11,13 +11,14 @@
 
 //  Default platform specific method pointers to null space to declare prototypes for compile time
 #define plt_millis() 0
-#define plt_delay(...)
+#define plt_delay(ms)
 
 #define SMSerialInterfaceClass void *
 
 // PROGMEM strings support
-#define PROGMEM_PTR void *
-#define PROGMEM_STR(x) x
+#define PMEM_STR(str) str
+#define PMEM_STR_REF(string_literal) string_literal
+#define PMEM_STR_REF_ARRAY(pmem_char_array) (&pmem_char_array[0])
 
 #include "platforms/_arduino.h"
 

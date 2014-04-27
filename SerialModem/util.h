@@ -9,7 +9,7 @@
 #define MIN(a,b) ({ __typeof__ (a) _a = (a); __typeof__ (b) _b = (b); _a < _b ? _a : _b; })
 #endif
 
-namespace Modem {
+// namespace Modem {
   static const int SUCCESS = 1;
   static const int NO_RESPONSE = 0;
   static const int ERROR = -1;
@@ -26,12 +26,14 @@ namespace Modem {
   char *cgb_sprintf(const char *format, ...);
 
   /**
-   * __PROGMEM_STR is a string wrapper used for PROGMEM strings to bring them into the SRAM heap temporarily
+   * PMemString is a string wrapper used for PROGMEM strings to bring them into the SRAM heap temporarily
    */
-  class __PROGMEM_STR {
+  class __PMemStringRef;
+  class PMemString {
   public:
-    __PROGMEM_STR(PROGMEM_PTR ptr);
-    ~__PROGMEM_STR(void);
+    PMemString(const char *str);
+    explicit PMemString(const __PMemStringRef *ptr);
+    ~PMemString(void);
 
     operator const char*() { return _buffer; }
     operator char*() { return _buffer; }
@@ -39,6 +41,8 @@ namespace Modem {
   protected:
     char *_buffer;
   };
+
+
 
   /**
    * CircularBuffer is used when we are reading data from the modem and parsing for responses
@@ -59,8 +63,8 @@ namespace Modem {
     char *_ptrStart;
     char *_ptrEnd;
   };
-}
+// }
 
-extern Modem::CircularBuffer *g_circularBuffer;
+extern CircularBuffer *g_circularBuffer;
 
 #endif
